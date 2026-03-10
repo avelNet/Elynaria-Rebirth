@@ -1,0 +1,54 @@
+﻿/[Aa]ssets/AssetStoreTools*
+
+# Визуальная студия и временные файлы
+.vs/
+.gradle/
+ExportedObj/
+.consulo/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln
+*.launch
+*.psess
+*.vsp
+*.vspx
+*.g3pstpath
+*.xmllog
+*.opendb
+*.db-shm
+*.db-wal
+
+# Unity кэш и временные папки
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Mm]emoryCaptures/
+[Uu]nityConfiguration.gen.cpp
+[Aa]ssets/Plugins/Editor/JetBrains*
+
+# Пользовательские настройки проекта
+[Aa]ssets/[Ss]ettings/ProjectSettings.asset
+[Pp]roject[Ss]ettings/ProjectVersion.txt
+# Если хочешь сохранить настройки проекта, убери /ProjectSettings ниже
+/[Pp]roject[Ss]ettings/
+!/[Pp]roject[Ss]ettings/ProjectSettings.asset
+!/[Pp]roject[Ss]ettings/TagManager.asset
+!/[Pp]roject[Ss]ettings/InputManager.asset
+!/[Pp]roject[Ss]ettings/EditorBuildSettings.asset
+!/[Pp]roject[Ss]ettings/EditorSettings.asset
+!/[Pp]roject[Ss]ettings/GraphicsSettings.asset
+!/[Pp]roject[Ss]ettings/PresetManager.asset
+!/[Pp]roject[Ss]ettings/TimeManager.asset
+!/[Pp]roject[Ss]ettings/NavMeshAreas.asset
+
+# Сборки (Builds)
+/[Bb]uild/
+/[Bb]uilds/
+
+# Mac OS специфичные файлы
+.DS_Store
