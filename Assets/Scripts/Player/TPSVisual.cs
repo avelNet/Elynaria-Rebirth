@@ -18,14 +18,23 @@ namespace StarterAssets
 
         private void Update()
         {
-            if (_controller == null) return;
+            if(_animator != null )
+            {
+                RunningAnimations();
+            }
+        }
 
-            _animator.SetBool("isWalking", _controller.IsWalking);
-            _animator.SetBool("isRunning", _controller.IsRunning);
-            _animator.SetBool("isFastRunning", _controller.IsFastRunning);
-            _animator.SetBool("isStopping", _controller.IsStopping);
-
-            _animator.SetFloat("Speed", _controller.CurrentSpeed, 0.1f, Time.deltaTime);
+        private void RunningAnimations()
+        {
+            bool _isRunning = _controller.IsRunning();
+            if(_isRunning)
+            {
+                _animator.SetBool("isRunning", _isRunning);
+            }
+            else
+            {
+                _animator.SetBool("isRunning", false);
+            }
         }
     }
 }

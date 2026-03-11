@@ -1,167 +1,72 @@
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 namespace StarterAssets
 {
-    [RequireComponent(typeof(CharacterController))]
     public class ThirdPersonController : MonoBehaviour
     {
         [Header("Movement")]
-        public float MoveSpeed = 2.0f;
-        public float SprintSpeed = 5.0f;
-        public float ShiftMultiplier = 1.5f;
-        public float SpeedChangeRate = 10.0f;
-        public float RotationSmoothTime = 0.12f;
+        [SerializeField] private float _moveSpeed = 5.0f;
+        [SerializeField] private float _rotationSmoothTime = 0.12f;
+        private bool _isRunning;
 
-        [Header("Jump & Gravity")]
-        public float JumpHeight = 1.2f;
-        public float Gravity = -15.0f;
-        public float JumpTimeout = 0.1f;
-
-        [Header("Grounded Check")]
-        public float GroundedOffset = -0.14f;
-        public float GroundRadius = 0.28f;
-        public LayerMask GroundLayers;
-
-        [Header("Cinemachine")]
-        public GameObject CinemachineCameraTarget;
-        public float TopClamp = 70.0f;
-        public float BottomClamp = -30.0f;
-
-        // Свойства для Animator
-        public float CurrentSpeed => _speed;
-        public bool IsWalking => _isWalking;
-        public bool IsRunning => _isRunning;
-        public bool IsFastRunning => _isFastRunning;
-        public bool HasInput => hasInput;
-
-        // Условие остановки: нет ввода + в этом движении хоть раз был спринт + мы на земле
-        public bool IsStopping => !hasInput && _hadSprint && _isGrounded;
-
-        private Vector2 _move;
-        private Vector2 _look;
-        private bool _jump;
-        private bool _isWalkingMode = false;
-        private bool _isWalking, _isRunning, _isFastRunning;
-        private bool _hadSprint;
-        private bool _isGrounded;
-        private bool hasInput;
-
-        private float _speed;
-        private float _targetRotation = 0.0f;
-        private float _rotationVelocity;
-        private float _verticalVelocity;
-        private float _jumpTimeoutDelta;
-        private float _cinemachineTargetYaw;
-        private float _cinemachineTargetPitch;
-
+        [Header("Components")]
+        [SerializeField] private GameObject CinemachineCameraTarget;
         private CharacterController _controller;
         private PlayerInputSystem _inputActions;
-        private GameObject _mainCamera;
+        private Transform _mainCamera;
+
+        [Header("Camera")]
+        [SerializeField] private float TopClamp = 70.0f;
+        [SerializeField] private float BottomClamp = -30.0f;
+        private float _cinemachineTargetYaw;
+        private float _cinemachineTargetPitch;
+        private float _targetRotation = 0.0f;
+        private float _rotationVelocity;
 
         private void Awake()
         {
-            _mainCamera = GameObject.FindGameObjectWithTag("MainCamera");
             _controller = GetComponent<CharacterController>();
-            _inputActions = new PlayerInputSystem();
-        }
+            _mainCamera = Camera.main.transform;
 
-        private void OnEnable()
-        {
-            _inputActions.Player.Move.performed += ctx => _move = ctx.ReadValue<Vector2>();
-            _inputActions.Player.Move.canceled += ctx => _move = Vector2.zero;
-            _inputActions.Player.Look.performed += ctx => _look = ctx.ReadValue<Vector2>();
-            _inputActions.Player.Look.canceled += ctx => _look = Vector2.zero;
-            _inputActions.Player.Jump.performed += ctx => _jump = true;
-            _inputActions.Player.WalkToggle.performed += ctx => _isWalkingMode = !_isWalkingMode;
+            _inputActions = new PlayerInputSystem();
             _inputActions.Enable();
         }
 
         private void Update()
         {
-            Jump();
             Move();
         }
 
         private void Move()
         {
-            hasInput = _move.sqrMagnitude > 0.01f;
-            bool isSprintingInput = _inputActions.Player.Sprint.IsPressed();
-            float targetSpeed = 0.0f;
+            Vector2 input = _inputActions.Player.Move.ReadValue<Vector2>();
+            Vector3 targetDirection = Vector3.zero;
 
-            if (hasInput)
+            if (input.sqrMagnitude > 0.01f)
             {
-                if (_isWalkingMode) targetSpeed = MoveSpeed;
-                else targetSpeed = isSprintingInput ? (SprintSpeed * ShiftMultiplier) : SprintSpeed;
-            }
+                // Угол для поворота игрока в нужную сторону
+                _targetRotation = Mathf.Atan2(input.x, input.y) * Mathf.Rad2Deg + _mainCamera.eulerAngles.y;
 
-            // Ускорение и замедление
-            _speed = Mathf.Lerp(_speed, targetSpeed, Time.deltaTime * SpeedChangeRate);
-
-            // Логика состояний
-            // Обычный бег активен при любом движении без режима ходьбы
-            // Ускоренный бег (спринт) — отдельный флаг поверх обычного бега
-            _isWalking = hasInput && _isWalkingMode;
-            _isRunning = hasInput && !_isWalkingMode;
-            _isFastRunning = hasInput && !_isWalkingMode && isSprintingInput;
-            if (_isFastRunning)
-            {
-                _hadSprint = true;
-            }
-
-            // Если скорости почти нет, обнуляем её совсем и сбрасываем флаг спринта
-            if (!hasInput && _speed < 0.1f)
-            {
-                _speed = 0f;
-                _hadSprint = false;
-            }
-
-            Vector3 move = Vector3.zero;
-
-            if (hasInput || _speed > 0.1f)
-            {
-                Vector3 inputDirection = new Vector3(_move.x, 0.0f, _move.y).normalized;
-
-                if (hasInput)
-                    _targetRotation = Mathf.Atan2(inputDirection.x, inputDirection.z) * Mathf.Rad2Deg + _mainCamera.transform.eulerAngles.y;
-
-                float rotation = Mathf.SmoothDampAngle(transform.eulerAngles.y, _targetRotation, ref _rotationVelocity, RotationSmoothTime);
+                // Вращение в сторону куда смотрит камера
+                float rotation = Mathf.SmoothDampAngle(transform.eulerAngles.y, _targetRotation, ref _rotationVelocity, _rotationSmoothTime);
                 transform.rotation = Quaternion.Euler(0.0f, rotation, 0.0f);
 
-                Vector3 targetDirection = Quaternion.Euler(0.0f, _targetRotation, 0.0f) * Vector3.forward;
-                move = targetDirection.normalized * (_speed * Time.deltaTime);
-            }
-
-            // Всегда применяем вертикальную скорость (гравитация и прыжок), иначе в воздухе застреваем
-            move += new Vector3(0.0f, _verticalVelocity * Time.deltaTime, 0.0f);
-            _controller.Move(move);
-        }
-
-        private void Jump()
-        {
-            Vector3 spherePosition = new Vector3(transform.position.x, transform.position.y - GroundedOffset, transform.position.z);
-            _isGrounded = Physics.CheckSphere(spherePosition, GroundRadius, GroundLayers, QueryTriggerInteraction.Ignore);
-
-            if (_isGrounded)
-            {
-                if (_verticalVelocity < 0.0f) _verticalVelocity = -2f;
-                if (_jump && _jumpTimeoutDelta <= 0.0f)
-                {
-                    _verticalVelocity = Mathf.Sqrt(JumpHeight * -2f * Gravity);
-                    _jump = false;
-                }
-                if (_jumpTimeoutDelta >= 0.0f) _jumpTimeoutDelta -= Time.deltaTime;
+                // Направление для джижения
+                targetDirection = Quaternion.Euler(0.0f, _targetRotation, 0.0f) * Vector3.forward;
+                _isRunning = true;
             }
             else
             {
-                _jump = false;
-                _jumpTimeoutDelta = JumpTimeout;
-                _verticalVelocity += Gravity * Time.deltaTime;
+                _isRunning = false;
             }
+
+            Vector3 move = targetDirection * (_moveSpeed * Time.deltaTime);
+            _controller.Move(move);
         }
 
         private void LateUpdate()
         {
+            Vector2 _look = _inputActions.Player.Look.ReadValue<Vector2>();
             if (_look.sqrMagnitude >= 0.01f)
             {
                 _cinemachineTargetYaw += _look.x;
@@ -178,7 +83,9 @@ namespace StarterAssets
             if (angle > 360f) angle -= 360f;
             return Mathf.Clamp(angle, min, max);
         }
-
-        private void OnDisable() => _inputActions.Disable();
+        public bool IsRunning()
+        {
+            return _isRunning;
+        }
     }
 }
