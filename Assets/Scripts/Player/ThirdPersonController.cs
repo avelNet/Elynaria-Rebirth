@@ -35,8 +35,8 @@ namespace StarterAssets
         public bool IsFastRunning => _isFastRunning;
         public bool HasInput => hasInput;
 
-        // Условие остановки: нет ввода + в этом движении хоть раз был спринт
-        public bool IsStopping => !hasInput && _hadSprint;
+        // Условие остановки: нет ввода + в этом движении хоть раз был спринт + мы на земле
+        public bool IsStopping => !hasInput && _hadSprint && _isGrounded;
 
         private Vector2 _move;
         private Vector2 _look;
@@ -44,6 +44,7 @@ namespace StarterAssets
         private bool _isWalkingMode = false;
         private bool _isWalking, _isRunning, _isFastRunning;
         private bool _hadSprint;
+        private bool _isGrounded;
         private bool hasInput;
 
         private float _speed;
@@ -115,11 +116,12 @@ namespace StarterAssets
                 _hadSprint = false;
             }
 
+            Vector3 move = Vector3.zero;
+
             if (hasInput || _speed > 0.1f)
             {
                 Vector3 inputDirection = new Vector3(_move.x, 0.0f, _move.y).normalized;
 
-                // Поворачиваемся по вводу, если он есть, иначе сохраняем текущий поворот
                 if (hasInput)
                     _targetRotation = Mathf.Atan2(inputDirection.x, inputDirection.z) * Mathf.Rad2Deg + _mainCamera.transform.eulerAngles.y;
 
@@ -127,18 +129,20 @@ namespace StarterAssets
                 transform.rotation = Quaternion.Euler(0.0f, rotation, 0.0f);
 
                 Vector3 targetDirection = Quaternion.Euler(0.0f, _targetRotation, 0.0f) * Vector3.forward;
-
-                // Двигаем контроллер (даже при инерции торможения)
-                _controller.Move(targetDirection.normalized * (_speed * Time.deltaTime) + new Vector3(0.0f, _verticalVelocity, 0.0f) * Time.deltaTime);
+                move = targetDirection.normalized * (_speed * Time.deltaTime);
             }
+
+            // Всегда применяем вертикальную скорость (гравитация и прыжок), иначе в воздухе застреваем
+            move += new Vector3(0.0f, _verticalVelocity * Time.deltaTime, 0.0f);
+            _controller.Move(move);
         }
 
         private void Jump()
         {
             Vector3 spherePosition = new Vector3(transform.position.x, transform.position.y - GroundedOffset, transform.position.z);
-            bool isPhysicsGrounded = Physics.CheckSphere(spherePosition, GroundRadius, GroundLayers, QueryTriggerInteraction.Ignore);
+            _isGrounded = Physics.CheckSphere(spherePosition, GroundRadius, GroundLayers, QueryTriggerInteraction.Ignore);
 
-            if (isPhysicsGrounded)
+            if (_isGrounded)
             {
                 if (_verticalVelocity < 0.0f) _verticalVelocity = -2f;
                 if (_jump && _jumpTimeoutDelta <= 0.0f)
