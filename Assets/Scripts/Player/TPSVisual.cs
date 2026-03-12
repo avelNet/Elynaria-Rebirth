@@ -21,6 +21,7 @@ namespace StarterAssets
             if(_animator != null )
             {
                 RunningAnimations();
+                WalkingAnimation();
             }
         }
 
@@ -34,6 +35,19 @@ namespace StarterAssets
             else
             {
                 _animator.SetBool("isRunning", false);
+            }
+        }
+
+        private void WalkingAnimation()
+        {
+            bool _isWalking = _controller.IsWalking();
+            if(_isWalking)
+            {
+                _animator.SetBool("isWalking", _isWalking);
+            }
+            else
+            {
+                _animator.SetBool("isWalking", false);
             }
         }
     }
