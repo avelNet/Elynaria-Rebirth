@@ -160,7 +160,7 @@ namespace StarterAssets
 
             if (isPhysicsGrounded)
             {
-                // Обновляем таймер КД, если мы на земле
+                // Таймер КД уменьшается, пока мы на земле
                 if (_sprintJumpCooldownDelta > 0.0f)
                 {
                     _sprintJumpCooldownDelta -= Time.deltaTime;
@@ -175,8 +175,9 @@ namespace StarterAssets
                 }
 
                 // ПРОВЕРКА: Можно ли прыгать?
-                // Если это спринт — проверяем еще и таймер КД
-                bool canJumpByCooldown = !_isSprinting || _sprintJumpCooldownDelta <= 0.0f;
+                // КД теперь срабатывает, если мы либо бежим (_isRunning), либо ускоряемся (_isSprinting)
+                bool isMovingFast = _isRunning || _isSprinting;
+                bool canJumpByCooldown = !isMovingFast || _sprintJumpCooldownDelta <= 0.0f;
 
                 if (_isJumping && _jumpTimeoutDelta <= 0.0f && canJumpByCooldown)
                 {
@@ -187,9 +188,8 @@ namespace StarterAssets
                     _verticalVelocity = Mathf.Sqrt(JumpHeight * -2f * _gravity);
                     _isJumping = false;
 
-                    // Если это был прыжок со спринтом — запускаем КД сразу после отрыва
-                    // (или можно запускать при приземлении, но так надежнее)
-                    if (_isSprinting)
+                    // Если прыжок совершен во время движения — запускаем КД
+                    if (isMovingFast)
                     {
                         _sprintJumpCooldownDelta = _sprintJumpCooldown;
                     }
