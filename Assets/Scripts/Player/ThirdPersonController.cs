@@ -9,16 +9,30 @@ namespace StarterAssets
         [SerializeField] private float _moveSpeed = 3.0f;
         [SerializeField] private float _runningSpeed = 4.5f;
         [SerializeField] private float _sprintSpeed = 6.0f;
-        [SerializeField] private float _rotationSmoothTime = 0.12f;
-        private float _speedChangeRate = 10.0f;
-        private float _targetSpeed;
+        [SerializeField] private float _currentSpeed;
+        private Vector3 _moveDirection;
+        private float _rotationSmoothTime = 0.02f;
+        private float _speedChangeRate = 20.0f;
+
+        [Header("Bool")]
         private bool _isRunning;
         private bool _isRunMode;
         private bool _isWalking;
+        private bool _isSprinting;
+        private bool _isJumping;
+        private bool _wasRunningAtJumpStart;
+        private bool _wasWalkingAtJumpStart;
 
         [Header("Gravity")]
         [SerializeField] private float _gravity = -15.0f;
         private float _verticalVelocity;
+        private float _groundedOffset = -0.14f;
+        private float _groundRadius = 0.20f;
+        [SerializeField] private LayerMask GroundLayers;
+        private float Gravity = -15.0f;
+        private float _jumpTimeoutDelta;
+        private float JumpHeight = 1.2f;
+        private float JumpTimeout = 0.1f;
 
         [Header("Components")]
         [SerializeField] private GameObject CinemachineCameraTarget;
@@ -34,7 +48,7 @@ namespace StarterAssets
         private float _targetRotation = 0.0f;
         private float _rotationVelocity;
 
-        private float _currentSpeed;
+
         private float _ctrlInput => 
             _inputActions.Player.WalkToggle.ReadValue<float>();
         private float _shiftInput =>
@@ -51,12 +65,14 @@ namespace StarterAssets
         private void OnEnable()
         {
             _inputActions.Player.WalkToggle.performed += WalkToggle_performed;
+            _inputActions.Player.Jump.performed += Jump_performed;
             _inputActions.Enable();
         }
 
         private void OnDisable()
         {
             _inputActions.Player.WalkToggle.performed -= WalkToggle_performed;
+            _inputActions.Player.Jump.performed -= Jump_performed;
             _inputActions.Disable();
         }
 
@@ -64,38 +80,44 @@ namespace StarterAssets
         {
             _isRunMode = !_isRunMode;
         }
+        private void Jump_performed(InputAction.CallbackContext context)
+        {
+            _isJumping = true;
+        }
 
         private void Update()
         {
             Move();
+            Jump();
         }
 
         private void Move()
         {
             Vector2 input = _inputActions.Player.Move.ReadValue<Vector2>();
-            bool isSprinting = _inputActions.Player.Sprint.IsPressed();
+            bool isGrounded = IsGrounded();
 
-            ApplyGravity();
-            Vector3 targetDirection = Vector3.zero;
-
-            if (input.sqrMagnitude > 0.01f)
+            if (input.sqrMagnitude > 0.03f)
             {
                 float targetSpeed;
                 if(_isRunMode)
                 {
+                    _isWalking = false;
                     if(_shiftInput > 0.5f)
                     {
                         targetSpeed = _sprintSpeed;
+                        _isSprinting = true;
                     }
                     else
                     {
                         targetSpeed = _runningSpeed;
+                        _isSprinting = false;
                     }
                 }
                 else
                 {
                     targetSpeed = _moveSpeed;
                     _isWalking = true;
+                    _isSprinting = false;
                 }
 
                 _currentSpeed = Mathf.Lerp(_currentSpeed, targetSpeed, Time.deltaTime * _speedChangeRate);
@@ -108,33 +130,57 @@ namespace StarterAssets
                 transform.rotation = Quaternion.Euler(0.0f, rotation, 0.0f);
 
                 // Направление для джижения
-                targetDirection = Quaternion.Euler(0.0f, _targetRotation, 0.0f) * Vector3.forward;
+                _moveDirection = Quaternion.Euler(0.0f, _targetRotation, 0.0f) * Vector3.forward;
                 _isRunning = _currentSpeed > _moveSpeed + 0.1f;
+                if(_isRunning) _isWalking = false;
             }
             else
             {
                 _currentSpeed = Mathf.Lerp(_currentSpeed, 0f, _speedChangeRate * Time.deltaTime);
                 _isRunning = false;
                 _isWalking = false;
+                _isSprinting = false;
+
+                // На земле полностью останавливаемся и обнуляем направление,
+                // а в воздухе продолжаем движение по инерции в последнем направлении
+                if (isGrounded && _currentSpeed < 0.05f)
+                {
+                    _moveDirection = Vector3.zero;
+                }
             }
 
-            Vector3 move = targetDirection * (_currentSpeed * Time.deltaTime);
+            Vector3 move = _moveDirection * (_currentSpeed * Time.deltaTime);
             move.y = _verticalVelocity * Time.deltaTime;
             _controller.Move(move);
         }
 
-        private void ApplyGravity()
+        private void Jump()
         {
-            if(_controller.isGrounded)
+            Vector3 spherePosition = new Vector3(transform.position.x, transform.position.y - _groundedOffset, transform.position.z);
+            bool isPhysicsGrounded = Physics.CheckSphere(spherePosition, _groundRadius, GroundLayers, QueryTriggerInteraction.Ignore);
+
+            if (isPhysicsGrounded)
             {
-                if(_verticalVelocity < 0.0f)
+                if (_verticalVelocity < 0.0f)
                 {
                     _verticalVelocity = -2f;
+                    _wasRunningAtJumpStart = false;
+                    _wasWalkingAtJumpStart = false;
                 }
+                if (_isJumping && _jumpTimeoutDelta <= 0.0f)
+                {
+                    _wasRunningAtJumpStart = _isRunning;
+                    _wasWalkingAtJumpStart = _isWalking && !_isRunning;
+                    _verticalVelocity = Mathf.Sqrt(JumpHeight * -2f * Gravity);
+                    _isJumping = false;
+                }
+                if (_jumpTimeoutDelta >= 0.0f) _jumpTimeoutDelta -= Time.deltaTime;
             }
             else
             {
-                _verticalVelocity += _gravity * Time.deltaTime;
+                _isJumping = false;
+                _jumpTimeoutDelta = JumpTimeout;
+                _verticalVelocity += Gravity * Time.deltaTime;
             }
         }
 
@@ -157,14 +203,41 @@ namespace StarterAssets
             if (angle > 360f) angle -= 360f;
             return Mathf.Clamp(angle, min, max);
         }
-        public bool IsRunning()
+        public bool IsGrounded()
         {
-            return _isRunning;
+            Vector3 spherePosition = new Vector3(transform.position.x, transform.position.y - _groundedOffset, transform.position.z);
+            return Physics.CheckSphere(spherePosition, _groundRadius, GroundLayers, QueryTriggerInteraction.Ignore);
         }
 
         public bool IsWalking()
         {
             return _isWalking;
         }
+
+        public bool IsRunning()
+        {
+            return _isRunning;
+        }
+
+        public bool IsSprinting()
+        {
+            return _isSprinting;
+        }
+
+        public bool IsJumping()
+        {
+            return _isJumping;
+        }
+
+        public bool WasRunningAtJumpStart()
+        {
+            return _wasRunningAtJumpStart;
+        }
+
+        public bool WasWalkingAtJumpStart()
+        {
+            return _wasWalkingAtJumpStart;
+        }
+
     }
 }

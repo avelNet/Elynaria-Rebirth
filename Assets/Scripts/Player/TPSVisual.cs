@@ -7,6 +7,13 @@ namespace StarterAssets
         private Animator _animator;
         private ThirdPersonController _controller;
 
+        [Header("Animator Parametrs")]
+        private bool _isRunning;
+        private bool _isWalking;
+        private bool _isSprinting;
+        private float _landingDebounceTime = 0.1f;
+        private float _lastLandingTime = -1f;
+
         private void Awake()
         {
             Cursor.visible = false;
@@ -21,13 +28,15 @@ namespace StarterAssets
             if(_animator != null )
             {
                 RunningAnimations();
+                SprintAnimation();
                 WalkingAnimation();
+                JumpingAnimation();
             }
         }
 
         private void RunningAnimations()
         {
-            bool _isRunning = _controller.IsRunning();
+            _isRunning = _controller.IsRunning();
             if(_isRunning)
             {
                 _animator.SetBool("isRunning", _isRunning);
@@ -40,7 +49,7 @@ namespace StarterAssets
 
         private void WalkingAnimation()
         {
-            bool _isWalking = _controller.IsWalking();
+            _isWalking = _controller.IsWalking();
             if(_isWalking)
             {
                 _animator.SetBool("isWalking", _isWalking);
@@ -48,6 +57,45 @@ namespace StarterAssets
             else
             {
                 _animator.SetBool("isWalking", false);
+            }
+        }
+
+        private void SprintAnimation()
+        {
+            _isSprinting = _controller.IsSprinting();
+            _animator.SetBool("isSprinting", _isSprinting);
+        }
+
+        private void JumpingAnimation()
+        {
+            bool isGrounded = _controller.IsGrounded();
+
+            if (isGrounded)
+            {
+                _lastLandingTime = Time.time;
+                _animator.SetBool("IdleJumping", false);
+                _animator.SetBool("RunJumping", false);
+                _animator.SetBool("WalkingJumping", false);
+            }
+            else
+            {
+                bool pastLandingDebounce = (Time.time - _lastLandingTime) > _landingDebounceTime;
+                if (pastLandingDebounce)
+                {
+                    bool wasRunningAtJump = _controller.WasRunningAtJumpStart();
+                    bool wasWalkingAtJump = _controller.WasWalkingAtJumpStart();
+                    bool wasIdleAtJump = !wasRunningAtJump && !wasWalkingAtJump;
+
+                    _animator.SetBool("IdleJumping", wasIdleAtJump);
+                    _animator.SetBool("RunJumping", wasRunningAtJump);
+                    _animator.SetBool("WalkingJumping", wasWalkingAtJump);
+                }
+                else
+                {
+                    _animator.SetBool("IdleJumping", false);
+                    _animator.SetBool("RunJumping", false);
+                    _animator.SetBool("WalkingJumping", false);
+                }
             }
         }
     }
