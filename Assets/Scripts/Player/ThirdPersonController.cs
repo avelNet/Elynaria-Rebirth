@@ -11,7 +11,7 @@ namespace StarterAssets
         [SerializeField] private float _sprintSpeed = 6.0f;
         [SerializeField] private float _currentSpeed;
         private Vector3 _moveDirection;
-        private float _rotationSmoothTime = 0.02f;
+        private float _rotationSmoothTime = 0.12f;
         private float _speedChangeRate = 20.0f;
 
         [Header("Bool")]
@@ -23,16 +23,16 @@ namespace StarterAssets
         private bool _wasRunningAtJumpStart;
         private bool _wasWalkingAtJumpStart;
 
-        [Header("Gravity")]
+        [Header("Gravity AND Jump")]
         [SerializeField] private float _gravity = -15.0f;
         private float _verticalVelocity;
         private float _groundedOffset = -0.14f;
         private float _groundRadius = 0.20f;
         [SerializeField] private LayerMask GroundLayers;
-        private float Gravity = -15.0f;
         private float _jumpTimeoutDelta;
         private float JumpHeight = 1.2f;
         private float JumpTimeout = 0.1f;
+        private bool _wasSprintingAtJumpStart;
 
         [Header("Components")]
         [SerializeField] private GameObject CinemachineCameraTarget;
@@ -48,8 +48,11 @@ namespace StarterAssets
         private float _targetRotation = 0.0f;
         private float _rotationVelocity;
 
+        [Header("Sprint Jump Cooldown")]
+        [SerializeField] private float _sprintJumpCooldown = 0.3f; // Длительность КД
+        private float _sprintJumpCooldownDelta; // Счетчик времени
 
-        private float _ctrlInput => 
+        private float _ctrlInput =>
             _inputActions.Player.WalkToggle.ReadValue<float>();
         private float _shiftInput =>
             _inputActions.Player.Sprint.ReadValue<float>();
@@ -95,44 +98,42 @@ namespace StarterAssets
         {
             Vector2 input = _inputActions.Player.Move.ReadValue<Vector2>();
             bool isGrounded = IsGrounded();
+            bool hasInput = input.sqrMagnitude > 0.01f; // Проверка на наличие ввода
 
-            if (input.sqrMagnitude > 0.03f)
+            if (hasInput)
             {
                 float targetSpeed;
-                if(_isRunMode)
+                if (_isRunMode)
                 {
                     _isWalking = false;
-                    if(_shiftInput > 0.5f)
+                    if (_shiftInput > 0.5f)
                     {
                         targetSpeed = _sprintSpeed;
-                        _isSprinting = true;
+                        _isSprinting = true; // Сразу ставим флаг спринта
+                        _isRunning = true;
                     }
                     else
                     {
                         targetSpeed = _runningSpeed;
                         _isSprinting = false;
+                        _isRunning = true; // Даже если скорость еще не набрана, мы УЖЕ бежим
                     }
                 }
                 else
                 {
                     targetSpeed = _moveSpeed;
                     _isWalking = true;
+                    _isRunning = false;
                     _isSprinting = false;
                 }
 
                 _currentSpeed = Mathf.Lerp(_currentSpeed, targetSpeed, Time.deltaTime * _speedChangeRate);
 
-                    // Угол для поворота игрока в нужную сторону
                 _targetRotation = Mathf.Atan2(input.x, input.y) * Mathf.Rad2Deg + _mainCamera.eulerAngles.y;
-
-                // Вращение в сторону куда смотрит камера
                 float rotation = Mathf.SmoothDampAngle(transform.eulerAngles.y, _targetRotation, ref _rotationVelocity, _rotationSmoothTime);
                 transform.rotation = Quaternion.Euler(0.0f, rotation, 0.0f);
 
-                // Направление для джижения
                 _moveDirection = Quaternion.Euler(0.0f, _targetRotation, 0.0f) * Vector3.forward;
-                _isRunning = _currentSpeed > _moveSpeed + 0.1f;
-                if(_isRunning) _isWalking = false;
             }
             else
             {
@@ -141,8 +142,6 @@ namespace StarterAssets
                 _isWalking = false;
                 _isSprinting = false;
 
-                // На земле полностью останавливаемся и обнуляем направление,
-                // а в воздухе продолжаем движение по инерции в последнем направлении
                 if (isGrounded && _currentSpeed < 0.05f)
                 {
                     _moveDirection = Vector3.zero;
@@ -161,26 +160,48 @@ namespace StarterAssets
 
             if (isPhysicsGrounded)
             {
+                // Обновляем таймер КД, если мы на земле
+                if (_sprintJumpCooldownDelta > 0.0f)
+                {
+                    _sprintJumpCooldownDelta -= Time.deltaTime;
+                }
+
                 if (_verticalVelocity < 0.0f)
                 {
                     _verticalVelocity = -2f;
                     _wasRunningAtJumpStart = false;
                     _wasWalkingAtJumpStart = false;
+                    _wasSprintingAtJumpStart = false;
                 }
-                if (_isJumping && _jumpTimeoutDelta <= 0.0f)
+
+                // ПРОВЕРКА: Можно ли прыгать?
+                // Если это спринт — проверяем еще и таймер КД
+                bool canJumpByCooldown = !_isSprinting || _sprintJumpCooldownDelta <= 0.0f;
+
+                if (_isJumping && _jumpTimeoutDelta <= 0.0f && canJumpByCooldown)
                 {
+                    _wasSprintingAtJumpStart = _isSprinting;
                     _wasRunningAtJumpStart = _isRunning;
                     _wasWalkingAtJumpStart = _isWalking && !_isRunning;
-                    _verticalVelocity = Mathf.Sqrt(JumpHeight * -2f * Gravity);
+
+                    _verticalVelocity = Mathf.Sqrt(JumpHeight * -2f * _gravity);
                     _isJumping = false;
+
+                    // Если это был прыжок со спринтом — запускаем КД сразу после отрыва
+                    // (или можно запускать при приземлении, но так надежнее)
+                    if (_isSprinting)
+                    {
+                        _sprintJumpCooldownDelta = _sprintJumpCooldown;
+                    }
                 }
+
                 if (_jumpTimeoutDelta >= 0.0f) _jumpTimeoutDelta -= Time.deltaTime;
             }
             else
             {
                 _isJumping = false;
                 _jumpTimeoutDelta = JumpTimeout;
-                _verticalVelocity += Gravity * Time.deltaTime;
+                _verticalVelocity += _gravity * Time.deltaTime;
             }
         }
 
@@ -239,5 +260,9 @@ namespace StarterAssets
             return _wasWalkingAtJumpStart;
         }
 
+        public bool WasSprintingAtJumpStart()
+        {
+            return _wasSprintingAtJumpStart;
+        }
     }
 }

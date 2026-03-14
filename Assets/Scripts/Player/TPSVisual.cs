@@ -25,11 +25,25 @@ namespace StarterAssets
 
         private void Update()
         {
-            if(_animator != null )
+            if (_animator == null) return;
+
+            bool isGrounded = _controller.IsGrounded();
+
+            if (isGrounded)
             {
                 RunningAnimations();
                 SprintAnimation();
                 WalkingAnimation();
+
+                // Сбрасываем прыжковые параметры только когда приземлились
+                _animator.SetBool("SprintJumping", false);
+                _animator.SetBool("RunJumping", false);
+                _animator.SetBool("WalkingJumping", false);
+                _animator.SetBool("IdleJumping", false);
+            }
+            else
+            {
+                // НЕ выключайте isSprinting здесь сразу, если он нужен для условий перехода
                 JumpingAnimation();
             }
         }
@@ -37,7 +51,7 @@ namespace StarterAssets
         private void RunningAnimations()
         {
             _isRunning = _controller.IsRunning();
-            if(_isRunning)
+            if (_isRunning)
             {
                 _animator.SetBool("isRunning", _isRunning);
             }
@@ -50,7 +64,7 @@ namespace StarterAssets
         private void WalkingAnimation()
         {
             _isWalking = _controller.IsWalking();
-            if(_isWalking)
+            if (_isWalking)
             {
                 _animator.SetBool("isWalking", _isWalking);
             }
@@ -73,29 +87,28 @@ namespace StarterAssets
             if (isGrounded)
             {
                 _lastLandingTime = Time.time;
+
                 _animator.SetBool("IdleJumping", false);
-                _animator.SetBool("RunJumping", false);
                 _animator.SetBool("WalkingJumping", false);
+                _animator.SetBool("RunJumping", false);
+                _animator.SetBool("SprintJumping", false);
             }
             else
             {
                 bool pastLandingDebounce = (Time.time - _lastLandingTime) > _landingDebounceTime;
-                if (pastLandingDebounce)
-                {
-                    bool wasRunningAtJump = _controller.WasRunningAtJumpStart();
-                    bool wasWalkingAtJump = _controller.WasWalkingAtJumpStart();
-                    bool wasIdleAtJump = !wasRunningAtJump && !wasWalkingAtJump;
 
-                    _animator.SetBool("IdleJumping", wasIdleAtJump);
-                    _animator.SetBool("RunJumping", wasRunningAtJump);
-                    _animator.SetBool("WalkingJumping", wasWalkingAtJump);
-                }
-                else
-                {
-                    _animator.SetBool("IdleJumping", false);
-                    _animator.SetBool("RunJumping", false);
-                    _animator.SetBool("WalkingJumping", false);
-                }
+                if (!pastLandingDebounce) return;
+
+                bool wasSprintingAtJump = _controller.WasSprintingAtJumpStart();
+                bool wasRunningAtJump = _controller.WasRunningAtJumpStart();
+                bool wasWalkingAtJump = _controller.WasWalkingAtJumpStart();
+
+                bool wasIdleAtJump = !wasRunningAtJump && !wasWalkingAtJump && !wasSprintingAtJump;
+
+                _animator.SetBool("SprintJumping", wasSprintingAtJump);
+                _animator.SetBool("RunJumping", wasRunningAtJump);
+                _animator.SetBool("WalkingJumping", wasWalkingAtJump);
+                _animator.SetBool("IdleJumping", wasIdleAtJump);
             }
         }
     }
