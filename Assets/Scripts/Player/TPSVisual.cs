@@ -4,13 +4,14 @@ namespace StarterAssets
 {
     public class TPSVisual : MonoBehaviour
     {
+        // MoveState: 0=Idle, 1=Walking, 2=Running, 3=Sprinting
+        private static readonly int MoveStateHash = Animator.StringToHash("MoveState");
+        // JumpState: 0=None, 1=IdleJump, 2=WalkJump, 3=RunJump, 4=SprintJump
+        private static readonly int JumpStateHash = Animator.StringToHash("JumpState");
+
         private Animator _animator;
         private ThirdPersonController _controller;
 
-        [Header("Animator Parametrs")]
-        private bool _isRunning;
-        private bool _isWalking;
-        private bool _isSprinting;
         private float _landingDebounceTime = 0.1f;
         private float _lastLandingTime = -1f;
 
@@ -26,90 +27,42 @@ namespace StarterAssets
         private void Update()
         {
             if (_animator == null) return;
-
-            bool isGrounded = _controller.IsGrounded();
-
-            if (isGrounded)
-            {
-                RunningAnimations();
-                SprintAnimation();
-                WalkingAnimation();
-
-                // Сбрасываем прыжковые параметры только когда приземлились
-                _animator.SetBool("SprintJumping", false);
-                _animator.SetBool("RunJumping", false);
-                _animator.SetBool("WalkingJumping", false);
-                _animator.SetBool("IdleJumping", false);
-            }
-            else
-            {
-                // НЕ выключайте isSprinting здесь сразу, если он нужен для условий перехода
-                JumpingAnimation();
-            }
+            UpdateMoveState();
+            UpdateJumpState();
         }
 
-        private void RunningAnimations()
+        private void UpdateMoveState()
         {
-            _isRunning = _controller.IsRunning();
-            if (_isRunning)
-            {
-                _animator.SetBool("isRunning", _isRunning);
-            }
-            else
-            {
-                _animator.SetBool("isRunning", false);
-            }
+            int state = 0;
+            if (_controller.IsSprinting())       state = 3;
+            else if (_controller.IsRunning())    state = 2;
+            else if (_controller.IsWalking())    state = 1;
+
+            _animator.SetInteger(MoveStateHash, state);
         }
 
-        private void WalkingAnimation()
-        {
-            _isWalking = _controller.IsWalking();
-            if (_isWalking)
-            {
-                _animator.SetBool("isWalking", _isWalking);
-            }
-            else
-            {
-                _animator.SetBool("isWalking", false);
-            }
-        }
-
-        private void SprintAnimation()
-        {
-            _isSprinting = _controller.IsSprinting();
-            _animator.SetBool("isSprinting", _isSprinting);
-        }
-
-        private void JumpingAnimation()
+        private void UpdateJumpState()
         {
             bool isGrounded = _controller.IsGrounded();
 
             if (isGrounded)
             {
                 _lastLandingTime = Time.time;
-
-                _animator.SetBool("IdleJumping", false);
-                _animator.SetBool("WalkingJumping", false);
-                _animator.SetBool("RunJumping", false);
-                _animator.SetBool("SprintJumping", false);
+                _animator.SetInteger(JumpStateHash, 0);
+                return;
             }
-            else
+
+            bool pastDebounce = (Time.time - _lastLandingTime) > _landingDebounceTime;
+            if (!pastDebounce)
             {
-                bool pastLandingDebounce = (Time.time - _lastLandingTime) > _landingDebounceTime;
-
-                if (!pastLandingDebounce) return;
-
-                bool wasSprintingAtJump = _controller.WasSprintingAtJumpStart();
-                bool wasRunningAtJump = _controller.WasRunningAtJumpStart();
-                bool wasWalkingAtJump = _controller.WasWalkingAtJumpStart();
-
-                bool wasIdleAtJump = !wasRunningAtJump && !wasWalkingAtJump && !wasSprintingAtJump;
-
-                _animator.SetBool("SprintJumping", wasSprintingAtJump);
-                _animator.SetBool("RunJumping", wasRunningAtJump);
-                _animator.SetBool("WalkingJumping", wasWalkingAtJump);
-                _animator.SetBool("IdleJumping", wasIdleAtJump);
+                _animator.SetInteger(JumpStateHash, 0);
+                return;
             }
+
+            if (_controller.WasSprintingAtJumpStart())      _animator.SetInteger(JumpStateHash, 4);
+            else if (_controller.WasRunningAtJumpStart())   _animator.SetInteger(JumpStateHash, 3);
+            else if (_controller.WasWalkingAtJumpStart())   _animator.SetInteger(JumpStateHash, 2);
+            else                                            _animator.SetInteger(JumpStateHash, 1);
         }
     }
 }

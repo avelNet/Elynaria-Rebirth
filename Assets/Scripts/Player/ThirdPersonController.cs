@@ -22,6 +22,7 @@ namespace StarterAssets
         private bool _isJumping;
         private bool _wasRunningAtJumpStart;
         private bool _wasWalkingAtJumpStart;
+        private bool _wasSprintingAtJumpStart;
 
         [Header("Gravity AND Jump")]
         [SerializeField] private float _gravity = -15.0f;
@@ -32,7 +33,6 @@ namespace StarterAssets
         private float _jumpTimeoutDelta;
         private float JumpHeight = 1.2f;
         private float JumpTimeout = 0.1f;
-        private bool _wasSprintingAtJumpStart;
 
         [Header("Components")]
         [SerializeField] private GameObject CinemachineCameraTarget;
